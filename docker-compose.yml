@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+
+  redis:
+    image: redis:alpine
+    container_name: redis_email_subs_app
+
+  db:
+    image: postgres
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    container_name: postgres_db_email_subs_app
+
+  app:
+    build: .
+    volumes:
+      - .:/django
+    ports:
+      - 8000:8000
+    image: app:django
+    container_name: django_email_subs_app
+    command: python manage.py runserver 0.0.0.0:8000
+    depends_on:
+      - db
+
+  celery:
+    restart: always
+    build:
+      context: .
+    command: celery -A core worker -l INFO
+    volumes:
+      - .:/django
+    environment:
+      - DJANGO_SETTINGS_MODULE=core.settings
+    container_name: celery_email_subs_app
+    depends_on:
+      - db
+      - redis
+      - app
+
+  celery-beat:
+    build: .
+    command: celery -A core beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/django
+    environment:
+      - DJANGO_SETTINGS_MODULE=core.settings
+    container_name: celery_beat_email_subs_app
+    depends_on:
+      - db
+      - redis
+      - app
+      - celery
+
+  rabbitmq3:
+    container_name: rabbitmq_email_subs_app
+    image: rabbitmq:3.8-management-alpine
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=admin
+    ports:
+      # AMQP protocol port
+      - '5672:5672'
+      # HTTP management UI
+      - '15672:15672'
+
+  flower:
+    image: mher/flower:0.9.7
+    command: [ 'flower', '--broker=pyamqp://admin:admin@host.docker.internal//', '--port=5555' ]
+    ports:
+      - 5555:5555
+    depends_on:
+      - redis

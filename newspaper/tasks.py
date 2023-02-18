@@ -3,7 +3,6 @@ from __future__ import absolute_import, unicode_literals
 from datetime import date
 
 from celery.utils.log import get_task_logger
-from celery import shared_task
 from django.core.mail import send_mail
 from django.conf import settings
 
@@ -13,7 +12,7 @@ from newspaper import models
 logger = get_task_logger(__name__)
 
 
-@shared_task
+@app.task()
 def send_hardcoded_email_task():
     subject = 'Celery Task Worked!!'
     message = 'This is proof the task worked!'
@@ -24,7 +23,7 @@ def send_hardcoded_email_task():
         subject, message, email_from, recipent_list, fail_silently=False
     )
 
-@shared_task(bind=True)
+@app.task(bind=True)
 def send_email_task(self, recipent_list, subject, message):
     subject = subject
     message = message
